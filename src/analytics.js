@@ -1,77 +1,98 @@
-function claveTexto(texto) {
-  if (typeof texto !== 'string') return '';
-  return texto.trim().normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('es');
+function Normalize(texto) {
+  if (typeof texto !== 'string') return ''
+  return texto.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
 }
 
-function esVentaValida(venta) {
-  return Boolean(venta) && Number.isFinite(venta.amount) && Number.isFinite(venta.price) && venta.amount > 0;
+function isValidSale(sale) {
+  return quantity(sale) > 0 && Number.isFinite(sale.amount) && Number.isFinite(sale.price);
 }
 
-function valorVenta(venta) {
-  return venta.amount * venta.price;
+function salePrice(sale) {
+  return sale.amount * sale.price;
 }
 
-function totalVendido(ventas) {
+function quantity(sale) {
+  if (!sale) return 0;
+  const amount = Number(sale.amount);
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+function price(sale) {
+  if (!sale) return 0;
+  const price = Number(sale.price);
+  return Number.isFinite(price) ? price : 0;
+}
+
+function countValidSales(sales) {
+  let validas = 0;
+  for (const sale of sales) {
+    if (isValidSale(sale)) validas++;
+  }
+  return validas;
+}
+
+
+function totalSold(sales) {
   let total = 0;
-  for (const venta of ventas) {
-    if (!esVentaValida(venta)) continue;
-    total += valorVenta(venta);
+  for (const sale of sales) {
+    if (!isValidSale(sale)) continue;
+    total += salePrice(sale);
   }
   return total;
 }
 
-function unidadesVendidas(ventas) {
-  let unidades = 0;
-  for (const venta of ventas) {
-    if (!esVentaValida(venta)) continue;
-    unidades += venta.amount;
+function unitsSold(sales) {
+  let units = 0;
+  for (const sale of sales) {
+    if (!isValidSale(sale)) continue;
+    units += quantity(sale);
   }
-  return unidades;
+  return units;
 }
 
-function ventaMayor(ventas) {
-  let mayor = null;
-  let valorMayor = 0;
-  for (const venta of ventas) {
-    if (!esVentaValida(venta)) continue;
-    const valor = valorVenta(venta);
-    if (mayor === null || valor > valorMayor) {
-      mayor = venta;
-      valorMayor = valor;
+function wholesale(sales) {
+  let may = null;
+  let valueMay = 0;
+  for (const sale of sales) {
+    if (!isValidSale(sale)) continue;
+    const valor = salePrice(sale);
+    if (may === null || valor > valueMay) {
+      may = sale;
+      valueMay = valor;
     }
   }
-  return mayor;
+  return may;
 }
 
-function ticketPromedio(ventas) {
+function averageTicket(sales) {
   let total = 0;
-  let validas = 0;
-  for (const venta of ventas) {
-    if (!esVentaValida(venta)) continue;
-    total += valorVenta(venta);
-    validas += 1;
+  let valid = 0;
+  for (const sale of sales) {
+    if (!isValidSale(sale)) continue;
+    total += salePrice(sale);
+    valid += 1;
   }
-  if (validas === 0) return 0;
-  return total / validas;
+  if (valid === 0) return 0;
+  return total / valid;
 }
 
-function ventasPorCiudad(ventas, ciudad) {
-  const buscada = claveTexto(ciudad);
+function salesByCity(sales, city) {
+  const buscada = Normalize(city);
   if (buscada === '') return 0;
   let total = 0;
-  for (const venta of ventas) {
-    if (!esVentaValida(venta)) continue;
-    if (claveTexto(venta.city) === buscada) {
-      total += valorVenta(venta);
+  for (const sale of sales) {
+    if (!isValidSale(sale)) continue;
+    if (Normalize(sale.city) === buscada) {
+      total += salePrice(sale);
     }
   }
   return total;
 }
 
 module.exports = {
-  totalVendido,
-  unidadesVendidas,
-  ventaMayor,
-  ticketPromedio,
-  ventasPorCiudad,
+  totalSold,
+  unitsSold,
+  wholesale,
+  averageTicket,
+  salesByCity,
 };
