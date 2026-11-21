@@ -32,3 +32,152 @@ The table printed by `src/explore.js` is built from the `sales` array in `src/da
 | 2 | Sale with zero units: a record has a product and a price but no quantity. | `id: 8` (`client: C06`, `Origen Huila 500 g`) has `amount: 0` and `price: 42000`. | Treat it as a non-revenue event: flag it, exclude it from units-sold and revenue calculations (otherwise revenue is unchanged but the row distorts counts and averages), and confirm with the business whether it is a cancelled order, a sample, or a data-entry error. Keep the row in the raw dataset rather than deleting it. |
 | 3 | Clients are only opaque codes with no master data, so they cannot be validated and repeating codes are easy to miscount. | `client` values are codes such as `C01`–`C08`; `C01` appears in `id: 1`, `4` and `11`, and there is no client name or registry in the dataset. | Add a client catalog and validate every code against it to catch typos or unknown clients. Compute customer metrics from distinct codes (8 unique clients, not 12 rows) so repeat purchases are not counted as new customers. |
 | 4 | A client whose only transaction is the zero-amount sale would disappear from valid-sale reports. | `C06` appears only in `id: 8`, the record with `amount: 0`. | After excluding zero-quantity sales, flag `C06` as a client with no valid purchase and verify whether the order should be reclassified or the client is inactive; do not silently drop the code from the client dimension. |
+
+---
+
+### Minireto 2
+
+No `reduce`, `map` or other shortcuts at this stage. Each metric gets its own pass over the data so every step is visible.
+
+Shared rule (from the edge-case decision): a record with `amount <= 0` is not a valid purchase, so it is skipped by every metric. Revenue per sale is `price * amount`.
+
+#### 1. Total revenue
+
+- Traverse: every record in `sales`.
+- Condition: `sale.amount > 0`.
+- Accumulate: revenue of each valid sale into `totalRevenue`.
+- Initial value: `totalRevenue = 0` (adding nothing must yield zero).
+
+```text
+totalRevenue = 0
+for each sale in sales:
+    if sale.amount > 0:
+        totalRevenue = totalRevenue + sale.price * sale.amount
+return totalRevenue
+```
+
+#### 2. Units sold
+
+- Traverse: every record in `sales`.
+- Condition: `sale.amount > 0`.
+- Accumulate: the quantity of each valid sale into `unitsSold`.
+- Initial value: `unitsSold = 0`.
+
+```
+unitsSold = 0
+for each sale in sales:
+    if sale.amount > 0:
+        unitsSold = unitsSold + sale.amount
+return unitsSold
+```
+
+#### 3. Largest sale
+
+- Traverse: every record in `sales`.
+- Condition: `sale.amount > 0` and the sale's revenue is greater than the current maximum.
+- Accumulate: keep the highest revenue found (and the `id` of the sale that produced it, for traceability).
+- Initial value: `largestSale = 0`, `largestSaleId = null`, so the first valid sale necessarily becomes the maximum.
+
+```
+largestSale = 0
+largestSaleId = null
+for each sale in sales:
+    if sale.amount > 0:
+        saleRevenue = sale.price * sale.amount
+        if saleRevenue > largestSale:
+            largestSale = saleRevenue
+            largestSaleId = sale.id
+return largestSale, largestSaleId
+```
+
+#### 4. Average ticket (average spend per purchase)
+
+- Traverse: every record in `sales`.
+- Condition: `sale.amount > 0`.
+- Accumulate: both the revenue of each valid purchase and the number of valid purchases.
+- Initial value: `ticketRevenue = 0`, `purchaseCount = 0`; guard the division so an empty dataset does not produce `NaN`.
+
+```
+ticketRevenue = 0
+purchaseCount = 0
+for each sale in sales:
+    if sale.amount > 0:
+        ticketRevenue = ticketRevenue + sale.price * sale.amount
+        purchaseCount = purchaseCount + 1
+if purchaseCount > 0:
+    return ticketRevenue / purchaseCount
+else:
+    return 0
+```
+
+---
+
+### Minireto 3
+
+#### Empty-array behavior (decided before testing)
+
+| Function | `[]` returns | Reason |
+| --- | --- | --- |
+| `totalVendido([])` | `0` | The accumulator starts at `0` and no sale is added. |
+| `unidadesVendidas([])` | `0` | No units were shipped. |
+| `ventaMayor([])` | `null` | There is no record to return, so `null` is an explicit "no sale" sentinel; returning `undefined` or a fabricated object would be misleading. |
+| `ticketPromedio([])` | `0` | There are no purchases; returning `0` avoids `NaN` from dividing by zero. |
+| `ventasPorCiudad([], 'Medellín')` | `0` | No records match any city. |
+
+#### Test matrix
+
+Tests live in `src/analytics.test.js` and run with `node --test` (Node's built-in test runner, no external dependency). All 6 tests pass.
+
+| Function | Full array (`sales`) | Single element (`[sales[0]]`) | Empty array (`[]`) |
+| --- | --- | --- | --- |
+| `totalVendido` | `985000` | `84000` | `0` |
+| `unidadesVendidas` | `21` | `2` | `0` |
+| `ventaMayor` | `sales[9]` (`id: 10`, `168000`) | `sales[0]` (`id: 1`) | `null` |
+| `ticketPromedio` | `985000 / 11` ≈ `89545.45` | `84000` | `0` |
+| `ventasPorCiudad` (Medellín) | `356000` (including lowercase `medellín`) | `84000` | `0` |
+
+An extra test checks the zero-quantity record (`id: 8`) alone: it yields `0`, `0`, `null` and `0` respectively, confirming that it is not treated as a valid purchase.
+
+#### Manual verification 1 — `totalVendido(sales)`
+
+Hand calculation, adding `price * amount` row by row and skipping `id: 8` because `amount = 0`:
+
+| Step (`id`) | amount | price | Sale value | Running total |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 2 | 42000 | 84000 | 84000 |
+| 2 | 1 | 26000 | 26000 | 110000 |
+| 3 | 1 | 95000 | 95000 | 205000 |
+| 4 | 1 | 42000 | 42000 | 247000 |
+| 5 | 3 | 45000 | 135000 | 382000 |
+| 6 | 2 | 26000 | 52000 | 434000 |
+| 7 | 1 | 120000 | 120000 | 554000 |
+| 8 | 0 | 42000 | skipped | 554000 |
+| 9 | 2 | 45000 | 90000 | 644000 |
+| 10 | 4 | 42000 | 168000 | 812000 |
+| 11 | 1 | 95000 | 95000 | 907000 |
+| 12 | 3 | 26000 | 78000 | 985000 |
+
+Manual result: **985000 COP**; program result: `985000`. Match.
+
+#### Manual verification 2 — `ventaMayor(sales)`
+
+Hand calculation, comparing each valid sale value against the running maximum:
+
+| Step (`id`) | Sale value | Max before | Max after | Winning `id` |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 84000 | none | 84000 | 1 |
+| 2 | 26000 | 84000 | 84000 | 1 |
+| 3 | 95000 | 84000 | 95000 | 3 |
+| 4 | 42000 | 95000 | 95000 | 3 |
+| 5 | 135000 | 95000 | 135000 | 5 |
+| 6 | 52000 | 135000 | 135000 | 5 |
+| 7 | 120000 | 135000 | 135000 | 5 |
+| 8 | skipped | 135000 | 135000 | 5 |
+| 9 | 90000 | 135000 | 135000 | 5 |
+| 10 | 168000 | 135000 | 168000 | 10 |
+| 11 | 95000 | 168000 | 168000 | 10 |
+| 12 | 78000 | 168000 | 168000 | 10 |
+
+Manual result: **`sales[9]` (`id: 10`), 168000 COP**; program result: the same record. Match.
+
+A third cross-check: 11 valid purchases give `985000 / 11` ≈ `89545.45` COP per purchase, equal to `ticketPromedio(sales)`.
