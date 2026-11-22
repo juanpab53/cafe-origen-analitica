@@ -8,7 +8,7 @@ Space where technical decisions and deliverables are explained regarding.
 
 ### Minireto 1
 
-#### Data Dictionary (Diccionario de datos)
+#### Data Dictionary
 
 The table printed by `src/explore.js` is built from the `sales` array in `src/data.js`. Each record has the following properties:
 
@@ -24,7 +24,7 @@ The table printed by `src/explore.js` is built from the `sales` array in `src/da
 
 ---
 
-#### Edge Cases Detected (Casos borde detectados)
+#### Edge Cases Detected
 
 | # | Issue | Evidence in the data | Decision |
 | --- | --- | --- | --- |
@@ -87,18 +87,18 @@ return units
 - Traverse: every record in `sales`.
 - Condition: `isValidSale(sale)` and the sale value is greater than the current maximum.
 - Accumulate: keep the highest `salePrice(sale)` and the record that produced it.
-- Initial value: `may = null`, `valueMay = 0`, so the first valid sale necessarily becomes the maximum.
+- Initial value: `highestSale = null`, `highestValue = 0`, so the first valid sale necessarily becomes the maximum.
 
 ```text
-may = null
-valueMay = 0
+highestSale = null
+highestValue = 0
 for each sale in sales:
     if not isValidSale(sale): continue
     value = salePrice(sale)
-    if may === null or value > valueMay:
-        may = sale
-        valueMay = value
-return may
+    if highestSale === null or value > highestValue:
+        highestSale = sale
+        highestValue = value
+return highestSale
 ```
 
 #### 4. Average ticket — `averageTicket`
@@ -240,3 +240,25 @@ Manual result: **`sales[9]` (`id: 10`), 168000 COP**
 - **What do I transform?** Each valid sale into salePrice(sale); the grouped result into sorted product objects [{ product, value }].
 - **What do I accumulate?** The monetary value per product in a Map.
 - **How do I group?** By normalized product name in a Map, keeping the first original product label; then I rank groups by value descending and take the top k.
+
+### Minireto 4
+
+#### Error 1 — “Bogotá appeared twice”
+
+- **Symptom:** When grouping sales by city, the same city appeared more than once due to variations in capitalization or accents.
+- **Input that reproduces it:** `[{city:'Bogotá',amount:1,price:26000},{city:'bogotá',amount:1,price:26000},{city:'BOGOTÁ',amount:1,price:26000}]`.
+- **Hypothesis:** The preliminary version grouped by the raw city value (`sale.city`) without normalizing the text.
+- **Test performed:** The preliminary version was simulated with a function that accumulates by `sales.city`; the result was `{ Bogotá: 26000, 'bogotá': 26000, 'BOGOTÁ': 26000 }`. In the current version, `totalByCity` returns `{"Bogotá":78000}` for the same input.
+- **Cause:** The city grouping key was not normalized.
+- **Fix:** `totalByCity` normalizes the key with `normalizeText` (trim, lowercase, remove diacritics), groups by normalized city in a `Map`, and preserves the first original label as the output key (`src/analytics.js`).
+- **Demonstration in v0.1:** With the actual data, `Object.keys(totalByCity(sales))` returns `["Medellín","Bogotá","Cali","Pereira"]`; Bogotá appears only once, with a total of `276000`.
+
+### Error 2 — “Average ticket returned NaN when filtering for a day with no sales”
+
+- **Symptom:** When calculating the average ticket for a day with no sales, the result was `NaN`.
+- **Input that reproduces it:** An empty array `[]`, such as the result of filtering sales for a date with no records (`sales.filter(s => s.date === '2026-09-08')`).
+- **Hypothesis:** The preliminary version calculated `total / valid` without handling the `valid === 0` case, producing `0 / 0 = NaN`.
+- **Test performed:** The preliminary version was simulated with `return total/valid`; for `[]`, it returned `NaN`. In the current version, `averageTicket([])` returns `0` and `Number.isNaN(averageTicket([]))` is `false`.
+- **Cause:** Division by zero when there are no valid sales.
+- **Fix:** `averageTicket` counts valid sales and returns `0` when `valid === 0` before dividing (`src/analytics.js`).
+- **Demonstration in v0.1:** `sales.filter(s => s.date === '2026-09-08')` has length `0`; `averageTicket(...)` returns `0`, not `NaN`.

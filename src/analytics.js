@@ -250,6 +250,30 @@ function saleByCityM(sales, city) {
 }
 
 /**
+ * ======= BLOCK FOR SALES BY DATE =======
+ */
+
+/**
+ * Builds a summary for sales on a specific date.
+ * @param {Array<Object>} sales - Sales records to process.
+ * @param {string} date - Target date in YYYY-MM-DD format.
+ * @returns {{date: string, salesCount: number, units: number, total: number}} Daily sales summary.
+ */
+function salesOfTheDay(sales, date) {
+  const targetDate = typeof date === 'string' ? date.trim() : '';
+  const daySales = sales.filter(
+    (sale) => isValidSale(sale) && typeof sale?.date === 'string' && sale.date.trim() === targetDate
+  );
+
+  return {
+    date: targetDate,
+    salesCount: daySales.length,
+    units: daySales.reduce((acc, sale) => acc + quantity(sale), 0),
+    total: daySales.reduce((acc, sale) => acc + salePrice(sale), 0),
+  };
+}
+
+/**
  * ======= BLOCK FOR OTHERS =======
 */
 
@@ -300,5 +324,6 @@ module.exports = {
   unitSoldM,
   saleByCityM,
   topProductsPerValue,
-  unitsPerProcduct
+  unitsPerProcduct,
+  salesOfTheDay
 };
