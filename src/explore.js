@@ -1,3 +1,6 @@
+/**
+ * Manual exploration script for the Café Origen sales dataset.
+ */
 const { sales } = require('./data');
 
 console.log('=== Café Origen · Data exploration ===\n');

@@ -1,3 +1,6 @@
+/**
+ * Manual test script for analytics functions and edge cases.
+ */
 const { sales } = require('./data');
 const {
   totalSold,
@@ -14,6 +17,11 @@ const cases = [
   { name: 'Empty', data: [] },
 ];
 
+/**
+ * Builds a readable label for a sale result.
+ * @param {Object|null} sale - Sale record or null.
+ * @returns {string} Human-readable sale description.
+ */
 function describeSale(sale) {
   return sale === null ? 'null' : `id ${sale.id} (${sale.amount * sale.price})`;
 }

@@ -1,3 +1,6 @@
+/**
+ * CLI report script that prints Café Origen sales analytics.
+ */
 const { sales } = require('./data');
 const {
     totalSold,
@@ -11,6 +14,11 @@ const {
 
 } = require('./analytics');
 
+/**
+ * Formats a numeric value using Colombian locale.
+ * @param {number} value - Value to format.
+ * @returns {string} Formatted value.
+ */
 function formatCurrency(value) {
     return Number(value).toLocaleString('es-CO');
 }

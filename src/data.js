@@ -1,3 +1,8 @@
+/**
+ * In-memory sales dataset for Café Origen analytics.
+ * Each sale: { id, date: 'YYYY-MM-DD', client, product, city, amount, price }.
+ * Includes edge cases for validation and grouping (e.g. amount 0, city casing variants).
+ */
 const sales = [
   {
     id: 1,

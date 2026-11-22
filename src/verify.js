@@ -1,3 +1,6 @@
+/**
+ * Verifies loop-based and array-method analytics implementations return the same results.
+ */
 const { sales } = require('./data');
 const {
   totalSold,
