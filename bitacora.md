@@ -121,8 +121,6 @@ return total / valid
 
 ---
 
-### Minireto 3
-
 #### Empty-array behavior (decided before testing)
 
 | Function | `[]` returns | Reason |
@@ -133,7 +131,7 @@ return total / valid
 | `averageTicket([])` | `0` | There are no purchases; returning `0` avoids `NaN` from dividing by zero. |
 | `salesByCity([], 'Medellín')` | `0` | No records match any city. |
 
-#### Test matrix
+#### Test
 
 A single test file is kept in sync with the current exports:
 
@@ -192,3 +190,53 @@ Hand calculation, comparing each valid sale value against the running maximum:
 | 12 | 78000 | 168000 | 168000 | 10 |
 
 Manual result: **`sales[9]` (`id: 10`), 168000 COP**
+
+### Minireto 3
+
+`totalSoldM(sales)`
+
+- **What do I traverse?** The sales array with reduce.
+- **What do I filter?** Invalid sales; skip entries where isValidSale(sale) is false.
+- **What do I transform?** Each valid sale into its monetary value with salePrice(sale).
+- **What do I accumulate?** The total sold amount in the reducer accumulator (acc).
+- **How do I group?** No grouping; I produce a single numeric total.
+
+`unitSoldM(sales)`
+
+- **What do I traverse?** The sales array with reduce.
+- **What do I filter?** Invalid sales; skip entries where isValidSale(sale) is false.
+- **What do I transform?** Each valid sale into its unit count with quantity(sale).
+- **What do I accumulate?** The total number of units sold in the reducer accumulator (acc).
+- **How do I group?** No grouping; I produce a single numeric total.
+
+`saleByCityM(sales, city)`
+
+- **What do I traverse?** The sales array with filter, then reduce.
+- **What do I filter?** Sales whose normalized city matches the normalized input city (normalizeText), and I guard with Boolean(sale); if the normalized input city is empty, I return 0.
+- **What do I transform?** Each matching sale into its monetary value with salePrice(sale).
+- **What do I accumulate?** The total sales value for that city in the reducer accumulator (acc).
+- **How do I group?** No grouping by multiple cities; I select/aggregate only the requested city into one total.
+
+`totalByCity(sales)`
+
+- **What do I traverse?** The sales array with a for...of loop.
+- **What do I filter?** Invalid sales (!isValidSale), non-string/empty normalized cities.
+- **What do I transform?** Each valid sale into salePrice(sale) and normalize the city key with normalizeText.
+- **What do I accumulate?** The monetary total per city in a Map
+- **How do I group?** By normalized city name in a Map, keeping the first original city label; then I convert it to a plain object { city: total }.
+
+`unitsPerProcduct(sales)`
+
+- **What do I traverse?** The sales array with a for...of loop.
+- **What do I filter?** Invalid sales (!isValidSale), non-string/empty normalized product names.
+- **What do I transform?** Each valid sale into quantity(sale) and normalize the product key with normalizeText.
+- **What do I accumulate?** The unit count per product in a Map.
+- **How do I group?** By normalized product name in a Map, keeping the first original product label; then I convert it to a plain object { product: units }.
+
+`topProductsPerValue(sales, k)`
+
+- **What do I traverse?** The sales array with a for...of loop, then the grouped values array with sort and slice.
+- **What do I filter?** Invalid sales (!isValidSale), empty normalized products, and invalid k values (!Number.isFinite(limit) || limit <= 0 returns []).
+- **What do I transform?** Each valid sale into salePrice(sale); the grouped result into sorted product objects [{ product, value }].
+- **What do I accumulate?** The monetary value per product in a Map.
+- **How do I group?** By normalized product name in a Map, keeping the first original product label; then I rank groups by value descending and take the top k.

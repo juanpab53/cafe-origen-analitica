@@ -1,6 +1,7 @@
 const { sales } = require('./data');
 const {
   totalSold,
+  totalByCity,
   unitsSold,
   wholesale,
   averageTicket,
@@ -27,6 +28,7 @@ for (const testCase of cases) {
     wholesale: describeSale(wholesale(testCase.data)),
     averageTicket: Number(averageTicket(testCase.data).toFixed(2)),
     'salesByCity(Medellín)': salesByCity(testCase.data, 'Medellín'),
+    totalByCity: JSON.stringify(totalByCity(testCase.data)),
   });
 }
 console.table(rows);
@@ -34,6 +36,12 @@ console.table(rows);
 const checks = [
   ['totalSold([sales[0]]) = 84000', totalSold([sales[0]]) === 84000],
   ['totalSold([zero-quantity sale]) = 0', totalSold([sales[7]]) === 0],
+  [
+    'totalByCity groups case variants and skips invalid sales',
+    JSON.stringify(totalByCity(sales)) ===
+      JSON.stringify({ Medellín: 356000, Bogotá: 276000, Cali: 185000, Pereira: 168000 }),
+  ],
+  ['totalByCity([]) = {}', JSON.stringify(totalByCity([])) === '{}'],
   ['salesByCity(sales, "") = 0', salesByCity(sales, '') === 0],
   ['totalSold(sales) = 985000', totalSold(sales) === 985000],
   ['unitsSold(sales) = 21', unitsSold(sales) === 21],
