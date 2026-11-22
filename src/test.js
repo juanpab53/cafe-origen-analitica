@@ -9,6 +9,7 @@ const {
   wholesale,
   averageTicket,
   salesByCity,
+  recurringClients,
 } = require('./analytics');
 
 const cases = [
@@ -37,6 +38,7 @@ for (const testCase of cases) {
     averageTicket: Number(averageTicket(testCase.data).toFixed(2)),
     'salesByCity(Medellín)': salesByCity(testCase.data, 'Medellín'),
     totalByCity: JSON.stringify(totalByCity(testCase.data)),
+    recurringClients: JSON.stringify(recurringClients(testCase.data)),
   });
 }
 console.table(rows);
@@ -71,6 +73,7 @@ const checks = [
   ['averageTicket([]) = 0 (not NaN)', averageTicket([]) === 0],
   ['salesByCity([], "Medellín") = 0', salesByCity([], 'Medellín') === 0],
   ['wholesale with no valid sales = null', wholesale([sales[7]]) === null],
+  ['recurringClients(sales) = C01,C02,C03', JSON.stringify(recurringClients(sales)) === JSON.stringify(['C01', 'C02', 'C03'])],
   ['averageTicket with no valid sales = 0', averageTicket([sales[7]]) === 0],
 ];
 

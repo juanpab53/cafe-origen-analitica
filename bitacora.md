@@ -315,3 +315,85 @@ The prediction was 10x for every 10x increase in `n` for the three instrumented 
 | `totalByCityInstrumented` | **O(n)** | One pass over the sales: one visit and one validity check per sale, plus an empty-key check and a Map-lookup check per valid sale: `2n + v + c`. The later loop over distinct cities is not nested and is bounded by the fixed city list. | 400 → 400000; with `v = c = n` this is `4n`, growing 10x per 10x `n`. |
 
 No measured function is quadratic. Each is 0(n): the code has a single pass over the input (plus, in `totalByCityInstrumented`, one separate, non-nested pass over at most `n` distinct cities), so the counted operations lie between `2n` and `4n` for any input. A quadratic algorithm would need about 100x as many operations when `n` grows 10x, or a loop over `n` nested inside another loop over `n`; the counters show exactly 10x and no such nesting exists. This assumes O(1) average cost for `Map.get`/`Map.set` and bounded-length city strings. The higher constant factor of `totalByCityInstrumented` (4 operations per sale versus 2 for `totalSoldInstrumented`) changes the cost but not the asymptotic class.
+
+### Minireto 6
+
+#### Trace of `recurringClients` with five sales
+
+Input (client codes only): `['C01', 'C02', 'C01', 'C03', 'C02']`.
+
+Counting rule: one comparison is counted for each evaluation of `sales[i].client === sales[j].client` and for each loop-condition check (`i < n`, `j < n`). `recurring.includes(...)` calls and their internal scans are reported separately because they are only evaluated after a match.
+
+| (i, j) | Clients compared | `client === client` | `includes` evaluated? | `recurring` after |
+| --- | --- | --- | --- | --- |
+| (0, 1) | C01 vs C02 | false | no | [] |
+| (0, 2) | C01 vs C01 | true | yes, C01 not found | [C01] |
+| (0, 3) | C01 vs C03 | false | no | [C01] |
+| (0, 4) | C01 vs C02 | false | no | [C01] |
+| (1, 2) | C02 vs C01 | false | no | [C01] |
+| (1, 3) | C02 vs C03 | false | no | [C01] |
+| (1, 4) | C02 vs C02 | true | yes, C02 not found | [C01, C02] |
+| (2, 3) | C01 vs C03 | false | no | [C01, C02] |
+| (2, 4) | C01 vs C02 | false | no | [C01, C02] |
+| (3, 4) | C03 vs C02 | false | no | [C01, C02] |
+
+Result: `['C01', 'C02']`. The 10 rows are all pairs with `i < j`, so the function makes **10 client-to-client comparisons** for `n = 5`. It makes 2 `includes` calls, whose internal scans compare 0 and 1 entries (1 internal comparison total for this input). Loop-condition checks are 6 for `i < n` and 15 for `j < n`, giving 21. Total explicit comparisons: **31**.
+
+#### Generalization for n sales
+
+| Counted item | n = 5 | General n | Growth |
+| --- | ---: | --- | --- |
+| Client-to-client comparisons | 10 | `n(n - 1) / 2` | O(n²) |
+| Loop-condition checks | 21 | `(n + 1) + n(n + 1) / 2 = (n + 1)(n + 2) / 2` | O(n²) |
+| Explicit comparisons total | 31 | `n² + n + 1` | O(n²) |
+| `includes` calls | 2 | at most `n(n - 1) / 2` | O(n²) |
+| Internal `includes` comparisons | 1 (data-dependent) | input-dependent; worst case O(n³) | see note |
+
+The pair count is the number of combinations of two sales, `C(n, 2) = n(n - 1) / 2`, so multiplying `n` by 10 multiplies the client comparisons by about 100. This is why the nested loops put `recurringClients` in **O(n²)**, the first quadratic example in this project (the instrumented functions were O(1) and O(n)).
+
+Note on the cost model: `includes` scans the current `recurring` array. In this trace it adds only 1 internal comparison. If those internal comparisons are counted and many repeated clients are placed after many distinct clients, each of the O(n²) matching pairs can scan O(n) entries, giving an O(n³) worst case. The usual classification based on the explicit pair comparisons remains O(n²), and the trace above uses that rule.
+
+#### Execution time of `recurringClients`
+
+| n | Pairs `n(n - 1) / 2` | Time (ms) | Factor vs previous n | Factor vs n = 1000 | Pair factor vs n = 1000 |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1000 | 499500 | 10.212 | - | 1.00x | 1.00x |
+| 2000 | 1999000 | 27.884 | 2.73x | 2.73x | 4.00x |
+| 4000 | 7998000 | 104.985 | 3.77x | 10.28x | 16.01x |
+| 8000 | 31996000 | 660.349 | 6.29x | 64.66x | 64.06x |
+| 16000 | 127992000 | 3059 | 4.63x | 299.55x | 256.24x |
+
+#### Effect of doubling n on the measured time
+
+If the time grows like `n²`, then doubling `n` should make the time about 4 times longer. The measured factors were 2.73x, 3.77x, 6.29x and 4.63x. They vary quite a bit, but they are much closer to 4 than to 2 (what we would expect if the time grew in a straight line with `n`) or to 1 (if the time did not change at all).
+
+The measurements are not perfectly regular, and there are possible reasons for that, although I did not check them:
+
+- **The first step (2.73x) is low.** At small sizes the times are very short (10 to 28 ms), and the first run is slower than normal because Node needs a moment to optimize the code the first time it runs.
+- **The 6.29x step is high.** Possible causes are Node's automatic memory cleanup running in the middle of the test, and the computer handling larger amounts of data less efficiently. Another cause is that each `recurring.includes` check gets slower as the `recurring` list grows.
+The overall picture is clearer than the individual steps. From `n = 1000` to `n = 16000`, the input grows 16 times and the time grows 299.55 times. If the program were linear, we would expect about 16 times. The number of pairs to check grows 256.24 times, and the measured time is only about 17% above that (299.55 / 256.24 ≈ 1.17), which is a small difference. This confirms that the time grows with the number of pairs, as expected for O(n²).
+
+#### Extrapolation to larger inputs
+
+Using the measured point `T(16000) = 3059 ms` and the quadratic model `T(n) ≈ c · n²`:
+
+| n | Scaling factor from n = 16000 | Estimated time |
+| ---: | ---: | ---: |
+| 100000 | ~39x | ~119500 ms (about 2.0 minutes) |
+| 1000000 | ~3900x | ~11950000 ms (about 3.3 hours) |
+
+#### Hidden cost of `recurring.includes`
+
+The O(n²) classification counts only the explicit `client === client` comparisons in the nested loops. The second part of the `if` is also work: `recurring.includes(...)` walks the `recurring` array from the start until it finds the client or reaches the end. `recurring` can grow to `k`, the number of distinct clients (`k ≤ n`), so one call can cost up to O(n) comparisons.
+
+`includes` is only evaluated when a pair of sales already has the same client. The number of such matching pairs can be O(n²). In the worst case those matches happen after `recurring` has already collected many distinct clients, so each of the O(n²) calls can scan O(n) entries. The hidden cost is therefore O(n² · n) = O(n³), not O(n²).
+
+Concrete worst case: take `k = n/4` filler clients with 2 sales each (that uses `n/2` sales). Each filler group produces one match, and after them `recurring` holds k clients. Then put `m = n/2` sales of one new client X. For X, the first matching pair scans the k filler entries and pushes X; the remaining `C(m, 2) - 1` pairs scan about k + 1 entries each. The cost is roughly `(k + 1) · C(m, 2) ≈ (n/4) · (n²/8) = n³/32`, which dominates the small `k²` cost of the filler phase. So the true worst case of this implementation is O(n³).
+
+Why the measurements did not show it: `salesGenerator` spreads sales over many clients with only a few sales each, so `recurring` stays modest and the scans are short. The five-sale trace also hides it: the two `includes` calls scan 0 and 1 entries (1 internal comparison). The O(n²) label remains correct for the explicit pair comparisons, but the full operation count of this implementation is O(n³) in the worst case.
+
+A `Set` would remove this hidden term: `seen.has(client)` and `seen.add(client)` are O(1) on average, so the nested pair comparisons would again be the only quadratic part.
+
+#### CONCLUSION
+
+The report slows down because, to find customers who bought more than once, it checks every sale against every other sale. With 1,000 sales that is about half a million checks; with 16,000 it is nearly 128 million. Doubling the number of sales does not double the work — it roughly quadruples it. On top of that, each time it finds a repeat customer it goes back through the list of customers already found, and that list keeps growing, which makes the slowest cases worse. In our test, 16,000 sales took 3 seconds; 100,000 would take about 2 minutes and one million several hours. To keep the report fast as sales grow, the way repeated customers are looked up should be changed so it does not review everything over and over.

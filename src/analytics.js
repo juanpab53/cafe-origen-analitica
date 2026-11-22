@@ -385,6 +385,21 @@ function firstSale(sales, counter) {
   return sales[0];
 }
 
+function recurringClients(sales) {
+  const recurring = [];
+  for (let i = 0; i < sales.length; i++) {
+    for (let j = i + 1; j < sales.length; j++) {
+      if (
+        sales[i].client === sales[j].client &&
+        !recurring.includes(sales[i].client)
+      ) {
+        recurring.push(sales[i].client);
+      }
+    }
+  }
+  return recurring;
+}
+
 module.exports = {
   totalSold,
   totalByCity,
@@ -401,5 +416,6 @@ module.exports = {
   totalSoldInstrumented,
   wholesaleInstrumented,
   totalByCityInstrumented,
-  firstSale
+  firstSale,
+  recurringClients
 };
