@@ -313,6 +313,78 @@ function averageTicket(sales) {
   return total / valid;
 }
 
+function countVisit(counter) {
+  if (!counter) return;
+  counter.visits = (counter.visits || 0) + 1;
+}
+
+function countComparison(counter) {
+  if (!counter) return;
+  counter.comparisons = (counter.comparisons || 0) + 1;
+}
+
+function totalSoldInstrumented(sales, counter) {
+  let total = 0;
+  for (const sale of sales) {
+    countVisit(counter);
+    countComparison(counter);
+    if (!isValidSale(sale)) continue;
+    total += salePrice(sale);
+  }
+  return total;
+}
+
+function wholesaleInstrumented(sales, counter) {
+  let highestSale = null;
+  let highestValue = 0;
+  for (const sale of sales) {
+    countVisit(counter);
+    countComparison(counter);
+    if (!isValidSale(sale)) continue;
+    const value = salePrice(sale);
+    countComparison(counter);
+    if (highestSale === null || value > highestValue) {
+      highestSale = sale;
+      highestValue = value;
+    }
+  }
+  return highestSale;
+}
+
+function totalByCityInstrumented(sales, counter) {
+  const cityTotals = new Map();
+  for (const sale of sales) {
+    countVisit(counter);
+    countComparison(counter);
+    if (!isValidSale(sale)) continue;
+    const city = sale.city;
+    const normalizedCity = normalizeText(city);
+    countComparison(counter);
+    if (normalizedCity === '') continue;
+
+    const current = cityTotals.get(normalizedCity);
+    countComparison(counter);
+    if (current) {
+      current.total += salePrice(sale);
+    } else {
+      cityTotals.set(normalizedCity, { city, total: salePrice(sale) });
+    }
+  }
+
+  const totals = {};
+  for (const { city, total } of cityTotals.values()) {
+    totals[city] = total;
+  }
+  return totals;
+}
+
+function firstSale(sales, counter) {
+  countComparison(counter);
+  if (!sales || sales.length === 0) return null;
+  countVisit(counter);
+  return sales[0];
+}
+
 module.exports = {
   totalSold,
   totalByCity,
@@ -325,5 +397,9 @@ module.exports = {
   saleByCityM,
   topProductsPerValue,
   unitsPerProcduct,
-  salesOfTheDay
+  salesOfTheDay,
+  totalSoldInstrumented,
+  wholesaleInstrumented,
+  totalByCityInstrumented,
+  firstSale
 };

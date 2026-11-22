@@ -262,3 +262,56 @@ Manual result: **`sales[9]` (`id: 10`), 168000 COP**
 - **Cause:** Division by zero when there are no valid sales.
 - **Fix:** `averageTicket` counts valid sales and returns `0` when `valid === 0` before dividing (`src/analytics.js`).
 - **Demonstration in v0.1:** `sales.filter(s => s.date === '2026-09-08')` has length `0`; `averageTicket(...)` returns `0`, not `NaN`.
+
+## Miniretos 5-8
+
+### Minireto 5
+
+#### Question
+
+If `n` (the number of sales) is multiplied by 10, by what factor does the operation count grow for `totalSoldInstrumented`, `wholesaleInstrumented` and `totalByCityInstrumented`?
+
+Prediction: **approximately 10x for each function** (linear growth, O(n)). Visits and the `totalSoldInstrumented` total are exactly 10x.
+
+| Function | Visits | Comparisons | Total operations |
+| --- | --- | --- | --- |
+| `totalSoldInstrumented` | `n` → exactly 10x | `n` (1 validity check per sale) → exactly 10x | `2n` → exactly 10x |
+| `wholesaleInstrumented` | `n` → exactly 10x | `n + v` (1 validity check per sale, 1 maximum check per valid sale) → ~10x | `2n + v` → ~10x |
+| `totalByCityInstrumented` | `n` → exactly 10x | `n + v + c` (1 validity check per sale, 1 empty-key check per valid sale, 1 Map-lookup check per valid sale with a non-empty normalized city) → ~10x | `2n + v + c` → ~10x |
+
+(`v` = valid sales, `c` = valid sales with a non-empty normalized city; `c ≤ v ≤ n`.)
+
+Every instrumented function makes a single counted pass over the array and performs a bounded number of counted operations per element, so each total lies between `2n` and `4n`. None of them nests an iteration over `n` inside another. `totalByCityInstrumented` also iterates once over the Map's distinct cities, but that loop is uncounted, not nested, and bounded by the fixed city list. Map lookups count as one operation each. The ratio is exactly 10x only when the proportion of valid sales stays the same; with random or small inputs it may deviate slightly. Operations that are not instrumented (`salePrice`, `normalizeText`, `isValidSale`) are outside the count. This prediction is written before running any measurement.
+
+#### Prediction vs measurement
+
+`node src/measure.js` runs each function over data from `salesGenerator(n)` for `n = 100, 1000, 10000, 100000`. The counter adds one operation per visited element and one per evaluated condition, so the reported total is `visits + comparisons`.
+
+| n | `totalSoldInstrumented` | `wholesaleInstrumented` | `totalByCityInstrumented` | `firstSale` |
+| ---: | ---: | ---: | ---: | ---: |
+| 100 | 200 | 300 | 400 | 2 |
+| 1000 | 2000 | 3000 | 4000 | 2 |
+| 10000 | 20000 | 30000 | 40000 | 2 |
+| 100000 | 200000 | 300000 | 400000 | 2 |
+
+Growth factor relative to `n = 100`:
+
+| n | `totalSoldInstrumented` | `wholesaleInstrumented` | `totalByCityInstrumented` | `firstSale` |
+| ---: | ---: | ---: | ---: | ---: |
+| 100 | 1x | 1x | 1x | 1x |
+| 1000 | 10x | 10x | 10x | 1x |
+| 10000 | 100x | 100x | 100x | 1x |
+| 100000 | 1000x | 1000x | 1000x | 1x |
+
+The prediction was 10x for every 10x increase in `n` for the three instrumented functions. The measurement confirms it exactly: 10x, 100x and 1000x, with no deviations because `salesGenerator` always produces valid sales (`amount` between 1 and 5, finite positive `price`), so `v = n` and `c = n` in the predicted formulas. The resulting totals match `2n`, `3n` and `4n`.
+
+#### Complexity classification
+
+| Function | Class | Justification from the code | Justification from the numbers |
+| --- | --- | --- | --- |
+| `firstSale` | **O(1)** | No loop: one length check (`sales.length === 0`) and a direct read of `sales[0]`. The work does not depend on `n`. | Always 2 operations (1 comparison + 1 visit) and a 1x growth factor for every input size. |
+| `totalSoldInstrumented` | **O(n)** | A single `for...of` over the sales, with one visit and one validity check per element: `2n` counted operations. | 200 → 200000 as `n` goes 100 → 100000; exactly 10x per 10x `n`. |
+| `wholesaleInstrumented` | **O(n)** | One pass over the sales: one visit and one validity check per sale, plus one comparison against the running maximum per valid sale: `2n + v`. | 300 → 300000; with `v = n` this is `3n`, growing 10x per 10x `n`. |
+| `totalByCityInstrumented` | **O(n)** | One pass over the sales: one visit and one validity check per sale, plus an empty-key check and a Map-lookup check per valid sale: `2n + v + c`. The later loop over distinct cities is not nested and is bounded by the fixed city list. | 400 → 400000; with `v = c = n` this is `4n`, growing 10x per 10x `n`. |
+
+No measured function is quadratic. Each is 0(n): the code has a single pass over the input (plus, in `totalByCityInstrumented`, one separate, non-nested pass over at most `n` distinct cities), so the counted operations lie between `2n` and `4n` for any input. A quadratic algorithm would need about 100x as many operations when `n` grows 10x, or a loop over `n` nested inside another loop over `n`; the counters show exactly 10x and no such nesting exists. This assumes O(1) average cost for `Map.get`/`Map.set` and bounded-length city strings. The higher constant factor of `totalByCityInstrumented` (4 operations per sale versus 2 for `totalSoldInstrumented`) changes the cost but not the asymptotic class.
