@@ -314,7 +314,7 @@ The prediction was 10x for every 10x increase in `n` for the three instrumented 
 | `wholesaleInstrumented` | **O(n)** | One pass over the sales: one visit and one validity check per sale, plus one comparison against the running maximum per valid sale: `2n + v`. | 300 → 300000; with `v = n` this is `3n`, growing 10x per 10x `n`. |
 | `totalByCityInstrumented` | **O(n)** | One pass over the sales: one visit and one validity check per sale, plus an empty-key check and a Map-lookup check per valid sale: `2n + v + c`. The later loop over distinct cities is not nested and is bounded by the fixed city list. | 400 → 400000; with `v = c = n` this is `4n`, growing 10x per 10x `n`. |
 
-No measured function is quadratic. Each is 0(n): the code has a single pass over the input (plus, in `totalByCityInstrumented`, one separate, non-nested pass over at most `n` distinct cities), so the counted operations lie between `2n` and `4n` for any input. A quadratic algorithm would need about 100x as many operations when `n` grows 10x, or a loop over `n` nested inside another loop over `n`; the counters show exactly 10x and no such nesting exists. This assumes O(1) average cost for `Map.get`/`Map.set` and bounded-length city strings. The higher constant factor of `totalByCityInstrumented` (4 operations per sale versus 2 for `totalSoldInstrumented`) changes the cost but not the asymptotic class.
+No measured function is quadratic. Each is O(n): the code has a single pass over the input (plus, in `totalByCityInstrumented`, one separate, non-nested pass over at most `n` distinct cities), so the counted operations lie between `2n` and `4n` for any input. A quadratic algorithm would need about 100x as many operations when `n` grows 10x, or a loop over `n` nested inside another loop over `n`; the counters show exactly 10x and no such nesting exists. This assumes O(1) average cost for `Map.get`/`Map.set` and bounded-length city strings. The higher constant factor of `totalByCityInstrumented` (4 operations per sale versus 2 for `totalSoldInstrumented`) changes the cost but not the asymptotic class.
 
 ### Minireto 6
 
@@ -397,3 +397,79 @@ A `Set` would remove this hidden term: `seen.has(client)` and `seen.add(client)`
 #### CONCLUSION
 
 The report slows down because, to find customers who bought more than once, it checks every sale against every other sale. With 1,000 sales that is about half a million checks; with 16,000 it is nearly 128 million. Doubling the number of sales does not double the work — it roughly quadruples it. On top of that, each time it finds a repeat customer it goes back through the list of customers already found, and that list keeps growing, which makes the slowest cases worse. In our test, 16,000 sales took 3 seconds; 100,000 would take about 2 minutes and one million several hours. To keep the report fast as sales grow, the way repeated customers are looked up should be changed so it does not review everything over and over.
+
+### Minireto 7
+
+#### City totals: how much work each version does
+
+Four functions in `src/analytics.js` calculate the total sales value for one city:
+
+| Function | How it works |
+| --- | --- |
+| `salesByCity(sales, city)` | One explicit loop over the sales. |
+| `saleByCityM(sales, city)` | `filter` and then `reduce`. |
+| `totalCityChain(sales, city)` | `map`, then `filter`, then `map`, then `reduce`, one after another. |
+| `totalCitySinglePass(sales, city)` | One explicit loop; it does not build temporary arrays. |
+
+All four apply the same rule: normalize the requested city, return `0` if it is empty, ignore invalid sales, and add the value of each matching sale. They were checked against `salesByCity` with 10,000 generated sales in five runs, and all returned the same result.
+
+#### Work per version
+
+| Function | Times the data is walked | New arrays created | Time | Extra space |
+| --- | --- | --- | --- | --- |
+| `salesByCity` | 1 | 0 | O(n) | O(1) |
+| `saleByCityM` | 2 | 1 | O(n) | O(n) |
+| `totalCityChain` | 4 | 3 | O(n) | O(n) |
+| `totalCitySinglePass` | 1 | 0 | O(n) | O(1) |
+
+`n` is the number of sales and `m` is the number of sales left after filtering (`m <= n`). The chained version walks `n + n + m + m` items, at most `4n`. It also copies every sale into a new object and builds three arrays. The single-pass version only keeps two numbers while it loops: the normalized city and the running total.
+
+These counts were confirmed with the 12-record dataset: for Medellín, the chained version called `map` twice, `filter` once and `reduce` once and created three arrays; each loop version created none. All four returned `356000`.
+
+#### Why four walks are still O(n)
+
+Big O describes how the work grows when the input grows, not the exact number of steps. Four walks over the data mean roughly `4 × n` steps, and the multiplier 4 is a constant: it does not change when `n` changes. The same rule removes other fixed numbers, such as the `7` in `2n + 7`. So both `n` steps and `4n` steps are written as O(n).
+
+The four walks happen one after another, not one inside another, so no step is repeated for every sale. Doubling the sales from 1,000 to 2,000 roughly doubles the work of both versions (about 4,000 to 8,000 visited items for the chain). A quadratic result would quadruple it, and that needs loops inside loops, which these functions do not have.
+
+#### Extra space used by every function in the engine
+
+"Extra space" means memory the function creates in addition to the `sales` array it receives. `n` is the number of sales. The letters `p`, `c`, `m`, `d` and `r` stand for the number of distinct products, distinct cities, sales left after a filter, sales on a given day and repeated clients. Each of them can grow up to `n`, so the classification is done for the worst case, not for the four cities in the sample file.
+
+#### Constant extra space: O(1)
+
+| Function | Why |
+| --- | --- |
+| `normalizeText` | Creates one short string at a time, bounded by the length of the name, not by the number of sales. |
+| `isValidSale`, `salePrice`, `quantity`, `price` | Only numeric conversions and comparisons. |
+| `countValidSales`, `unitsSold`, `unitSoldM`, `totalSold`, `totalSoldM` | One numeric accumulator. |
+| `salesByCity`, `totalCitySinglePass` | One normalized city string and one running total. |
+| `wholesale`, `firstSale` | Keep a reference to an existing sale; they do not copy it. |
+| `averageTicket` | Two numbers: total and count. |
+| `countVisit`, `countComparison` | Change a counter that already exists. |
+| `totalSoldInstrumented`, `wholesaleInstrumented` | Numbers only; the counter is supplied by the caller. |
+
+#### Space proportional to the data: O(n)
+
+| Function | What it keeps | Why it grows |
+| --- | --- | --- |
+| `totalByCity` | A `Map` and a plain object with one entry per distinct city. | The number of cities is small in the current data, but nothing limits it to four. With one new city per sale, the two structures grow with `n`. |
+| `topProductsPerValue` | A `Map` with every distinct product, an array built from all those products, and the final slice of the top `k`. | Asking for the top 3 does not make it O(3): all products are stored and sorted first, and only then cut down. The memory peak happens before the slice. |
+| `unitsPerProcduct` | A `Map` and a plain object with one entry per distinct product. | Same reason as `totalByCity`. |
+| `saleByCityM` | The array returned by `filter` with the matching sales. | Up to `n` sales can match. |
+| `totalCityChain` | An array of copies of all sales, an array of matches, and an array of values, plus the copied objects themselves. | Three arrays, but the first one already holds `n` items. |
+| `salesOfTheDay` | The array returned by `filter` with that day's sales. | A single day can contain all the sales. |
+| `totalByCityInstrumented` | The same `Map` and plain object as `totalByCity`. | The counters do not add memory; the grouping does. |
+| `recurringClients` | The list of client codes found more than once. | Up to `n` codes can be repeated. Its time is O(n²) because of the nested loops, but its memory is only O(n), because no full table of pairs is built. |
+
+#### Which city-total version stays in the engine
+
++After the comparison above, `totalCitySinglePass` is the version recommended for new code: one walk and no temporary arrays. `salesByCity` remains the public name used by `test.js` and `verify.js` and keeps its own explicit loop. `saleByCityM`, `totalCityChain` and `totalCitySinglePass` also remain exported so the technical lead can inspect and reproduce the comparison; none of them is called by `src/report.js`. Their measurements and the explanation of why all four are O(n) remain in the sections above.
+
+The choice rests on what was already measured: one walk and no temporary arrays versus four walks, three arrays and a copy of every sale. For a function that returns one number, that is a real cost, while the readability gain of the chained steps is small: the loop states the same ideas in order (normalize, validate, compare, add) without hiding allocations. Because the generator check showed that the versions are interchangeable in output, there is no accuracy reason to keep the heavier one.
+
+### Minireto 8
+
+Creation of `PERFORMANCE.md`: measured performance report and optimization plan.
+
+## Miniretos 9-12

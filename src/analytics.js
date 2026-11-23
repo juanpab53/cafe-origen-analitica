@@ -249,6 +249,30 @@ function saleByCityM(sales, city) {
     .reduce((acc, sale) => acc + salePrice(sale), 0)
 }
 
+function totalCityChain(sales, city) {
+  const normalizedCity = normalizeText(city);
+  if (normalizedCity === '') return 0;
+
+  return sales
+    .map((sale) => ({ ...sale, normalizedCity: normalizeText(sale?.city) }))
+    .filter((sale) => isValidSale(sale) && sale.normalizedCity === normalizedCity)
+    .map((sale) => salePrice(sale))
+    .reduce((total, value) => total + value, 0);
+}
+
+function totalCitySinglePass(sales, city) {
+  const normalizedCity = normalizeText(city);
+  if (normalizedCity === '') return 0;
+
+  let total = 0;
+  for (const sale of sales) {
+    if (!isValidSale(sale)) continue;
+    if (normalizeText(sale.city) !== normalizedCity) continue;
+    total += salePrice(sale);
+  }
+  return total;
+}
+
 /**
  * ======= BLOCK FOR SALES BY DATE =======
  */
@@ -417,5 +441,7 @@ module.exports = {
   wholesaleInstrumented,
   totalByCityInstrumented,
   firstSale,
-  recurringClients
+  recurringClients,
+  totalCityChain,
+  totalCitySinglePass,
 };
