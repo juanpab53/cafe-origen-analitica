@@ -9,6 +9,9 @@ const {
   wholesale,
   averageTicket,
   salesByCity,
+  recurringClients,
+  totalCityChain,
+  totalCitySinglePass,
 } = require('./analytics');
 
 const cases = [
@@ -37,6 +40,7 @@ for (const testCase of cases) {
     averageTicket: Number(averageTicket(testCase.data).toFixed(2)),
     'salesByCity(Medellín)': salesByCity(testCase.data, 'Medellín'),
     totalByCity: JSON.stringify(totalByCity(testCase.data)),
+    recurringClients: JSON.stringify(recurringClients(testCase.data)),
   });
 }
 console.table(rows);
@@ -47,7 +51,7 @@ const checks = [
   [
     'totalByCity groups case variants and skips invalid sales',
     JSON.stringify(totalByCity(sales)) ===
-      JSON.stringify({ Medellín: 356000, Bogotá: 276000, Cali: 185000, Pereira: 168000 }),
+    JSON.stringify({ Medellín: 356000, Bogotá: 276000, Cali: 185000, Pereira: 168000 }),
   ],
   ['totalByCity([]) = {}', JSON.stringify(totalByCity([])) === '{}'],
   ['salesByCity(sales, "") = 0', salesByCity(sales, '') === 0],
@@ -71,7 +75,54 @@ const checks = [
   ['averageTicket([]) = 0 (not NaN)', averageTicket([]) === 0],
   ['salesByCity([], "Medellín") = 0', salesByCity([], 'Medellín') === 0],
   ['wholesale with no valid sales = null', wholesale([sales[7]]) === null],
+  ['recurringClients(sales) = C01,C02,C03', JSON.stringify(recurringClients(sales)) === JSON.stringify(['C01', 'C02', 'C03'])],
   ['averageTicket with no valid sales = 0', averageTicket([sales[7]]) === 0],
+  [
+    'totalCityChain(sales, "Medellín") = 356000 (includes "medellín")',
+    totalCityChain(sales, 'Medellín') === 356000,
+  ],
+  [
+    'totalCityChain ignores case, spaces and accents ("  MEDELLÍN ") = 356000',
+    totalCityChain(sales, '  MEDELLÍN ') === 356000,
+  ],
+  [
+    'totalCityChain(sales, "Cali") = 185000 (skips zero-quantity sale)',
+    totalCityChain(sales, 'Cali') === 185000,
+  ],
+  ['totalCityChain(sales, "Cartagena") = 0', totalCityChain(sales, 'Cartagena') === 0],
+  ['totalCityChain(sales, "") = 0', totalCityChain(sales, '') === 0],
+  ['totalCityChain([], "Medellín") = 0', totalCityChain([], 'Medellín') === 0],
+  [
+    'totalCitySinglePass(sales, "Medellín") = 356000 (includes "medellín")',
+    totalCitySinglePass(sales, 'Medellín') === 356000,
+  ],
+  [
+    'totalCitySinglePass ignores case, spaces and accents ("  MEDELLÍN ") = 356000',
+    totalCitySinglePass(sales, '  MEDELLÍN ') === 356000,
+  ],
+  [
+    'totalCitySinglePass(sales, "Cali") = 185000 (skips zero-quantity sale)',
+    totalCitySinglePass(sales, 'Cali') === 185000,
+  ],
+  ['totalCitySinglePass(sales, "Cartagena") = 0', totalCitySinglePass(sales, 'Cartagena') === 0],
+  ['totalCitySinglePass(sales, "") = 0', totalCitySinglePass(sales, '') === 0],
+  ['totalCitySinglePass([], "Medellín") = 0', totalCitySinglePass([], 'Medellín') === 0],
+  [
+    'all three city implementations agree on every city and variant',
+    ['Medellín', 'medellín', '  MEDELLÍN ', 'Bogotá', 'Cali', 'Pereira', 'Cartagena', ''].every(
+      (name) =>
+        salesByCity(sales, name) === totalCityChain(sales, name) &&
+        salesByCity(sales, name) === totalCitySinglePass(sales, name)
+    ),
+  ],
+  [
+    'chained and single-pass implementations agree on empty input',
+    totalCityChain([], 'Medellín') === totalCitySinglePass([], 'Medellín'),
+  ],
+  [
+    'chained and single-pass implementations skip an invalid-only dataset',
+    totalCityChain([sales[7]], 'Cali') === 0 && totalCitySinglePass([sales[7]], 'Cali') === 0,
+  ],
 ];
 
 console.log('\n=== Tests ===');

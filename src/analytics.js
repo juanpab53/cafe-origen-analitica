@@ -249,6 +249,30 @@ function saleByCityM(sales, city) {
     .reduce((acc, sale) => acc + salePrice(sale), 0)
 }
 
+function totalCityChain(sales, city) {
+  const normalizedCity = normalizeText(city);
+  if (normalizedCity === '') return 0;
+
+  return sales
+    .map((sale) => ({ ...sale, normalizedCity: normalizeText(sale?.city) }))
+    .filter((sale) => isValidSale(sale) && sale.normalizedCity === normalizedCity)
+    .map((sale) => salePrice(sale))
+    .reduce((total, value) => total + value, 0);
+}
+
+function totalCitySinglePass(sales, city) {
+  const normalizedCity = normalizeText(city);
+  if (normalizedCity === '') return 0;
+
+  let total = 0;
+  for (const sale of sales) {
+    if (!isValidSale(sale)) continue;
+    if (normalizeText(sale.city) !== normalizedCity) continue;
+    total += salePrice(sale);
+  }
+  return total;
+}
+
 /**
  * ======= BLOCK FOR SALES BY DATE =======
  */
@@ -313,6 +337,93 @@ function averageTicket(sales) {
   return total / valid;
 }
 
+function countVisit(counter) {
+  if (!counter) return;
+  counter.visits = (counter.visits || 0) + 1;
+}
+
+function countComparison(counter) {
+  if (!counter) return;
+  counter.comparisons = (counter.comparisons || 0) + 1;
+}
+
+function totalSoldInstrumented(sales, counter) {
+  let total = 0;
+  for (const sale of sales) {
+    countVisit(counter);
+    countComparison(counter);
+    if (!isValidSale(sale)) continue;
+    total += salePrice(sale);
+  }
+  return total;
+}
+
+function wholesaleInstrumented(sales, counter) {
+  let highestSale = null;
+  let highestValue = 0;
+  for (const sale of sales) {
+    countVisit(counter);
+    countComparison(counter);
+    if (!isValidSale(sale)) continue;
+    const value = salePrice(sale);
+    countComparison(counter);
+    if (highestSale === null || value > highestValue) {
+      highestSale = sale;
+      highestValue = value;
+    }
+  }
+  return highestSale;
+}
+
+function totalByCityInstrumented(sales, counter) {
+  const cityTotals = new Map();
+  for (const sale of sales) {
+    countVisit(counter);
+    countComparison(counter);
+    if (!isValidSale(sale)) continue;
+    const city = sale.city;
+    const normalizedCity = normalizeText(city);
+    countComparison(counter);
+    if (normalizedCity === '') continue;
+
+    const current = cityTotals.get(normalizedCity);
+    countComparison(counter);
+    if (current) {
+      current.total += salePrice(sale);
+    } else {
+      cityTotals.set(normalizedCity, { city, total: salePrice(sale) });
+    }
+  }
+
+  const totals = {};
+  for (const { city, total } of cityTotals.values()) {
+    totals[city] = total;
+  }
+  return totals;
+}
+
+function firstSale(sales, counter) {
+  countComparison(counter);
+  if (!sales || sales.length === 0) return null;
+  countVisit(counter);
+  return sales[0];
+}
+
+function recurringClients(sales) {
+  const recurring = [];
+  for (let i = 0; i < sales.length; i++) {
+    for (let j = i + 1; j < sales.length; j++) {
+      if (
+        sales[i].client === sales[j].client &&
+        !recurring.includes(sales[i].client)
+      ) {
+        recurring.push(sales[i].client);
+      }
+    }
+  }
+  return recurring;
+}
+
 module.exports = {
   totalSold,
   totalByCity,
@@ -325,5 +436,12 @@ module.exports = {
   saleByCityM,
   topProductsPerValue,
   unitsPerProcduct,
-  salesOfTheDay
+  salesOfTheDay,
+  totalSoldInstrumented,
+  wholesaleInstrumented,
+  totalByCityInstrumented,
+  firstSale,
+  recurringClients,
+  totalCityChain,
+  totalCitySinglePass,
 };
